@@ -7,6 +7,7 @@ on:
     paths:
       - '.gitmodules'
       - '.github/workflows/build-obs-chapters-win64.yml'
+      - '.devcontainer_mxe64/**'
       - 'avidemux/**'
       - 'avidemux_core/**'
       - 'avidemux_plugins/**'
@@ -36,10 +37,10 @@ jobs:
       - name: Build using the Avidemux MXE toolchain container
         shell: bash
         run: |
-          set -o pipefail
+          set -euo pipefail
           if ! docker pull avidemux/avidemux_mxe:latest; then
-            echo "Prebuilt MXE image unavailable; building the toolchain container from the repository Dockerfile."
-            docker build -t avidemux/avidemux_mxe:latest -f .devcontainer_mxe64/Dockerfile .devcontainer_mxe64
+            echo "Prebuilt MXE image unavailable; building the toolchain container from the repository Dockerfile." | tee -a build-win64.log
+            docker build --progress=plain -t avidemux/avidemux_mxe:latest -f .devcontainer_mxe64/Dockerfile .devcontainer_mxe64 2>&1 | tee -a build-win64.log
           fi
           docker run --rm --user 0:0 \
             -v "$GITHUB_WORKSPACE:/workspace" \
