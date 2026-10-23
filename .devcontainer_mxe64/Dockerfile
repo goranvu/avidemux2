@@ -177,7 +177,7 @@ RUN make \
     x265 \
     xvidcore
 
-RUN make qt6-qttools && echo Done
+RUN make qt6-qttools && echo Done || { rc=$?; echo '===== MXE qt6-qttools failure diagnostics ====='; find /opt/mxe/log -maxdepth 3 -type f -name '*qt6-qttools*' -print; find /opt/mxe/log -maxdepth 3 -type f -name '*qt6-qttools*' -exec tail -n 300 {} \; 2>/dev/null || true; find /opt/mxe -maxdepth 7 -type f \( -name CMakeError.log -o -name CMakeOutput.log -o -name config.log \) -path '*qt6-qttools*' -exec tail -n 150 {} \; 2>/dev/null || true; exit $rc; }
 
 ENV PATH="/opt/mxe/usr/bin:/usr/local/bin:/opt/mxe/bin:/opt/mxe/usr/x86_64-pc-linux-gnu/qt6/bin/:${PATH}"
 # --- install libaom
