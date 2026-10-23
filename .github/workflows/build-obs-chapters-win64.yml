@@ -1,0 +1,65 @@
+name: Build OBS Hybrid MP4 chapter navigation (Windows x64)
+
+on:
+  push:
+    branches:
+      - obs-hybrid-mp4-chapters
+    paths:
+      - '.github/workflows/build-obs-chapters-win64.yml'
+      - 'avidemux/**'
+      - 'avidemux_core/**'
+      - 'avidemux_plugins/**'
+      - 'bootStrapCrossMingwQt6_2026.sh'
+      - 'mxe_scan_deps.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Prepare build log
+        run: |
+          printf 'Avidemux OBS Hybrid MP4 chapters - Windows x64 build\n' > build-win64.log
+          printf 'Commit: %s\n' "$GITHUB_SHA" >> build-win64.log
+          printf 'Started: %s\n' "$(date -u)" >> build-win64.log
+
+      - name: Build using the Avidemux MXE toolchain container
+        shell: bash
+        run: |
+          set -o pipefail
+          docker pull avidemux/avidemux_mxe:latest
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -w /workspace \
+            avidemux/avidemux_mxe:latest \
+            bash -lc 'set -o pipefail; bash ./bootStrapCrossMingwQt6_2026.sh 2>&1 | tee -a build-win64.log'
+
+      - name: Package portable Windows build
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f avidemux64/avidemux.exe
+          (cd avidemux64 && zip -qr ../Avidemux-OBS-Hybrid-Chapters-win64.zip .)
+          sha256sum Avidemux-OBS-Hybrid-Chapters-win64.zip | tee Avidemux-OBS-Hybrid-Chapters-win64.sha256
+
+      - name: Upload build files and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: avidemux-obs-hybrid-chapters-win64
+          path: |
+            Avidemux-OBS-Hybrid-Chapters-win64.zip
+            Avidemux-OBS-Hybrid-Chapters-win64.sha256
+            build-win64.log
+          if-no-files-found: warn
+          retention-days: 7
