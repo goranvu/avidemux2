@@ -34,14 +34,43 @@ jobs:
           printf 'Commit: %s\n' "$GITHUB_SHA" >> build-win64.log
           printf 'Started: %s\n' "$(date -u)" >> build-win64.log
 
-      - name: Build using the Avidemux MXE toolchain container
+      - name: Pull prebuilt MXE toolchain image
+        id: prebuilt-mxe
+        continue-on-error: true
+        run: docker pull avidemux/avidemux_mxe:latest
+
+      - name: Set up Docker Buildx
+        if: steps.prebuilt-mxe.outcome != 'success'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and cache Qt prerequisite stage
+        if: steps.prebuilt-mxe.outcome != 'success'
+        uses: docker/build-push-action@v6
+        with:
+          context: .devcontainer_mxe64
+          file: .devcontainer_mxe64/Dockerfile
+          target: mxe-qt-deps
+          tags: avidemux/avidemux_mxe:qt-deps
+          load: true
+          cache-from: type=gha,scope=avidemux-mxe-qt-deps
+          cache-to: type=gha,mode=max,scope=avidemux-mxe-qt-deps
+
+      - name: Build final MXE toolchain image
+        if: steps.prebuilt-mxe.outcome != 'success'
+        uses: docker/build-push-action@v6
+        with:
+          context: .devcontainer_mxe64
+          file: .devcontainer_mxe64/Dockerfile
+          target: final
+          tags: avidemux/avidemux_mxe:latest
+          load: true
+          cache-from: type=gha,scope=avidemux-mxe-qt-deps
+          cache-to: type=gha,mode=max,scope=avidemux-mxe-qt-deps
+
+      - name: Build Avidemux using the MXE toolchain container
         shell: bash
         run: |
           set -euo pipefail
-          if ! docker pull avidemux/avidemux_mxe:latest; then
-            echo "Prebuilt MXE image unavailable; building the toolchain container from the repository Dockerfile." | tee -a build-win64.log
-            docker build --progress=plain -t avidemux/avidemux_mxe:latest -f .devcontainer_mxe64/Dockerfile .devcontainer_mxe64 2>&1 | tee -a build-win64.log
-          fi
           docker run --rm --user 0:0 \
             -v "$GITHUB_WORKSPACE:/workspace" \
             -w /workspace \
