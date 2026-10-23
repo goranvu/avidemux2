@@ -36,12 +36,15 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          docker pull avidemux/avidemux_mxe:latest
+          if ! docker pull avidemux/avidemux_mxe:latest; then
+            echo "Prebuilt MXE image unavailable; building the toolchain container from the repository Dockerfile."
+            docker build -t avidemux/avidemux_mxe:latest -f .devcontainer_mxe64/Dockerfile .devcontainer_mxe64
+          fi
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/workspace" \
             -w /workspace \
             avidemux/avidemux_mxe:latest \
-            bash -lc 'set -o pipefail; bash ./bootStrapCrossMingwQt6_2026.sh 2>&1 | tee -a build-win64.log'
+            bash -lc 'trap '\''for f in /tmp/logbuildMingw*; do if [ -f "$f" ]; then echo "===== $f =====" >> /workspace/build-win64.log; cat "$f" >> /workspace/build-win64.log; fi; done'\'' EXIT; set -o pipefail; bash ./bootStrapCrossMingwQt6_2026.sh 2>&1 | tee -a build-win64.log'
 
       - name: Package portable Windows build
         if: success()
