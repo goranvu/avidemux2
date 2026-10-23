@@ -10,6 +10,10 @@
 #include <QWidget>
 #include <QtCore/QTimer>
 #include <QStatusBar>
+#include <QDockWidget>
+#include <QListWidget>
+#include <QList>
+#include <QString>
 #include <string>
 
 #include "ADM_mwNavSlider.h"
@@ -128,6 +132,7 @@ public:
     void addStatusBar(void);
     void removeStatusBar(void);
     void updateStatusBarInfo(void);
+    void loadCurrentMp4Chapters(void);
     void updateStatusBarDisplayInfo(const char * display);
     void updateStatusBarDecoderInfo(const char * decoder);
     void updateStatusBarZoomInfo(int zoom);
@@ -160,6 +165,15 @@ protected:
     std::vector<QMenu *> subMenus;
 #endif
     ThumbSlider *thumbSlider;
+
+    struct ObsMarker { uint64_t timeUs; QString name; };
+    QList<ObsMarker> obsMarkers;
+    QDockWidget *obsMarkerDock = nullptr;
+    QListWidget *obsMarkerList = nullptr;
+    void setupObsMarkers(void);
+    void clearObsMarkers(void);
+    void gotoObsMarker(int row);
+    void stepObsMarker(int direction);
 
     bool     refreshCapEnabled;
     uint32_t refreshCapValue;
@@ -240,6 +254,7 @@ private slots:
     void previewModeChangedFromToolbar(bool status);
 
     void currentTimeChanged(void);
+    void obsMarkerClicked(QListWidgetItem *item);
 
     void sliderValueChanged(int u);
     void sliderMoved(int value);

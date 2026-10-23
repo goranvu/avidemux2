@@ -32,6 +32,13 @@
 #include <QFontDatabase>
 #endif
 #include <QStyleFactory>
+#include <QDockWidget>
+#include <QListWidget>
+#include <QLabel>
+#include <QPushButton>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <algorithm>
 
 #ifdef __APPLE__
 #include <QFileOpenEvent>
@@ -52,6 +59,7 @@
 
 #include "ADM_last.h"
 #include "ADM_vidMisc.h"
+#include "ADM_segment.h"
 #include "DIA_fileSel.h"
 #include "avi_vars.h"
 #include "prefs.h"
@@ -821,6 +829,7 @@ MainWindow::MainWindow(const vector<IScriptEngine *> &scriptEngines) : _scriptEn
     buildMyMenu();
     buildCustomMenu(); // action lists are populated (i.e. buildActionLists() called) within buildCustomMenu()
     buildButtonLists();
+    setupObsMarkers();
 
 #define AUTOREPEAT_TOOLBUTTON(x)                                                                                       \
     ui.x->setAutoRepeat(true);                                                                                         \
@@ -926,6 +935,171 @@ MainWindow::MainWindow(const vector<IScriptEngine *> &scriptEngines) : _scriptEn
 
     QuiTaskBarProgress = createADMTaskBarProgress();
 }
+/** Native MP4 chapter list and navigation panel. */
+void MainWindow::setupObsMarkers(void)
+{
+    obsMarkerDock = new QDockWidget(QString::fromUtf8("MP4 poglavlja"), this);
+    obsMarkerDock->setObjectName("MP4ChaptersDock");
+    obsMarkerDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+
+    QWidget *content = new QWidget(obsMarkerDock);
+    QVBoxLayout *layout = new QVBoxLayout(content);
+    QLabel *hint = new QLabel(QString::fromUtf8("Ugrađena poglavlja iz MP4-a. Klikni na stavku za skok."), content);
+    hint->setWordWrap(true);
+    layout->addWidget(hint);
+
+    QPushButton *reload = new QPushButton(QString::fromUtf8("Učitaj poglavlja iz MP4-a"), content);
+    layout->addWidget(reload);
+
+    obsMarkerList = new QListWidget(content);
+    obsMarkerList->setAlternatingRowColors(true);
+    layout->addWidget(obsMarkerList, 1);
+
+    QHBoxLayout *nav = new QHBoxLayout();
+    QPushButton *previous = new QPushButton(QString::fromUtf8("◀ Prethodno"), content);
+    QPushButton *next = new QPushButton(QString::fromUtf8("Sledeće ▶"), content);
+    nav->addWidget(previous);
+    nav->addWidget(next);
+    layout->addLayout(nav);
+
+    content->setLayout(layout);
+    obsMarkerDock->setWidget(content);
+    addDockWidget(Qt::RightDockWidgetArea, obsMarkerDock);
+    obsMarkerDock->setMinimumWidth(220);
+    obsMarkerDock->hide();
+
+    QAction *toggle = obsMarkerDock->toggleViewAction();
+    toggle->setText(QString::fromUtf8("MP4 poglavlja"));
+    ui.menuTools->addSeparator();
+    ui.menuTools->addAction(toggle);
+
+    connect(reload, &QPushButton::clicked, this, &MainWindow::loadCurrentMp4Chapters);
+    connect(obsMarkerList, &QListWidget::itemClicked, this, &MainWindow::obsMarkerClicked);
+    connect(previous, &QPushButton::clicked, this, [this]() { stepObsMarker(-1); });
+    connect(next, &QPushButton::clicked, this, [this]() { stepObsMarker(1); });
+}
+
+void MainWindow::clearObsMarkers(void)
+{
+    obsMarkers.clear();
+    if (obsMarkerList)
+        obsMarkerList->clear();
+    if (ui.horizontalSlider)
+        static_cast<ADM_mwNavSlider *>(ui.horizontalSlider)->setChapterMarkers(std::vector<uint64_t>());
+    if (obsMarkerDock)
+        obsMarkerDock->setWindowTitle(QString::fromUtf8("MP4 poglavlja"));
+}
+
+void MainWindow::loadCurrentMp4Chapters(void)
+{
+    clearObsMarkers();
+    if (!video_body || !avifileinfo || video_body->getVideoCount() <= 0)
+    {
+        if (obsMarkerDock)
+            obsMarkerDock->hide();
+        return;
+    }
+
+    _VIDEOS *reference = video_body->getRefVideo(0);
+    if (!reference || !reference->_aviheader)
+    {
+        if (obsMarkerDock)
+            obsMarkerDock->hide();
+        return;
+    }
+
+    std::vector<ADM_ChapterMarker> chapters;
+    if (!reference->_aviheader->getChapterMarkers(chapters) || chapters.empty())
+    {
+        if (obsMarkerDock)
+            obsMarkerDock->hide();
+        return;
+    }
+
+    std::stable_sort(chapters.begin(), chapters.end(), [](const ADM_ChapterMarker &a, const ADM_ChapterMarker &b) {
+        return a.timeUs < b.timeUs;
+    });
+
+    std::vector<uint64_t> positions;
+    for (size_t i = 0; i < chapters.size(); ++i)
+    {
+        ObsMarker marker;
+        marker.timeUs = chapters[i].timeUs;
+        marker.name = QString::fromUtf8(chapters[i].name.c_str());
+        if (marker.name.trimmed().isEmpty())
+            marker.name = QString::fromUtf8("Poglavlje %1").arg(static_cast<qulonglong>(i + 1));
+        obsMarkers.append(marker);
+
+        const uint64_t timeMs = marker.timeUs / 1000ULL;
+        const uint64_t hours = timeMs / 3600000ULL;
+        const uint64_t minutes = (timeMs / 60000ULL) % 60ULL;
+        const uint64_t seconds = (timeMs / 1000ULL) % 60ULL;
+        const uint64_t millis = timeMs % 1000ULL;
+        const QString stamp = QStringLiteral("%1:%2:%3.%4")
+            .arg(static_cast<qulonglong>(hours), 2, 10, QLatin1Char('0'))
+            .arg(static_cast<qulonglong>(minutes), 2, 10, QLatin1Char('0'))
+            .arg(static_cast<qulonglong>(seconds), 2, 10, QLatin1Char('0'))
+            .arg(static_cast<qulonglong>(millis), 3, 10, QLatin1Char('0'));
+        obsMarkerList->addItem(stamp + QStringLiteral("  —  ") + marker.name);
+        positions.push_back(marker.timeUs);
+    }
+
+    static_cast<ADM_mwNavSlider *>(ui.horizontalSlider)->setChapterMarkers(positions);
+    obsMarkerDock->setWindowTitle(QString::fromUtf8("MP4 poglavlja (%1)").arg(obsMarkers.size()));
+    obsMarkerDock->show();
+}
+
+void MainWindow::obsMarkerClicked(QListWidgetItem *item)
+{
+    if (item && obsMarkerList)
+        gotoObsMarker(obsMarkerList->row(item));
+}
+
+void MainWindow::gotoObsMarker(int row)
+{
+    if (row < 0 || row >= obsMarkers.size() || !avifileinfo || playing)
+        return;
+
+    if (admPreview::seekToTime(obsMarkers[row].timeUs))
+    {
+        const uint64_t current = admPreview::getCurrentPts();
+        UI_setCurrentTime(current);
+        const uint64_t total = video_body->getVideoDuration();
+        if (total)
+            UI_setScale((static_cast<double>(current) * 100.0) / static_cast<double>(total));
+        obsMarkerList->setCurrentRow(row);
+    }
+}
+
+void MainWindow::stepObsMarker(int direction)
+{
+    if (obsMarkers.isEmpty() || !avifileinfo || playing)
+        return;
+
+    const uint64_t current = admPreview::getCurrentPts();
+    int candidate = -1;
+    if (direction > 0)
+    {
+        for (int i = 0; i < obsMarkers.size(); ++i)
+            if (obsMarkers[i].timeUs > current && obsMarkers[i].timeUs - current > 15000ULL)
+            {
+                candidate = i;
+                break;
+            }
+    }
+    else
+    {
+        for (int i = obsMarkers.size() - 1; i >= 0; --i)
+            if (obsMarkers[i].timeUs < current && current - obsMarkers[i].timeUs > 15000ULL)
+            {
+                candidate = i;
+                break;
+            }
+    }
+    if (candidate >= 0)
+        gotoObsMarker(candidate);
+}
+
 /**
     \fn searchToolBar
 */
@@ -3400,6 +3574,8 @@ void UI_setTitle(const char *name)
     }
 
     QuiMainWindows->setWindowTitle(QString::fromUtf8(title));
+    if (MainWindow::mainWindowSingleton)
+        MainWindow::mainWindowSingleton->loadCurrentMp4Chapters();
     delete[] title;
 }
 

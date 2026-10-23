@@ -24,6 +24,8 @@
 #    include <windows.h>
 #endif
 
+#include <string>
+#include <vector>
 #include "ADM_coreDemuxer6_export.h"
 #include "ADM_inttype.h"
 #include "avifmt.h"
@@ -58,6 +60,12 @@ typedef struct
     uint32_t   bpp;
     int32_t    bitrate;
 } aviInfo;
+
+typedef struct
+{
+    uint64_t timeUs; // chapter timestamp in microseconds
+    std::string name;
+} ADM_ChapterMarker;
 
 typedef struct
 {
@@ -151,5 +159,7 @@ virtual   bool                       providePts(void) {return true;};
 //
 virtual   bool                       getPtsDts(uint32_t frame,uint64_t *pts,uint64_t *dts)=0;
 virtual   bool                       setPtsDts(uint32_t frame,uint64_t pts,uint64_t dts)=0;
+// Demuxers which support container chapters override this method.
+virtual   bool                       getChapterMarkers(std::vector<ADM_ChapterMarker> &markers) const { markers.clear(); return false; }
 };
 #endif

@@ -63,6 +63,7 @@ version 2 media descriptor :
 
 #include "fourcc.h"
 #include "ADM_mp4.h"
+#include "ADM_mp4Chapters.h"
 
 #include "ADM_vidMisc.h"
 #include "DIA_processing.h"
@@ -357,6 +358,12 @@ uint8_t      MP4Header::getNbAudioStreams(void)
 }
 
 
+bool MP4Header::getChapterMarkers(std::vector<ADM_ChapterMarker> &markers) const
+{
+    markers = _chapterMarkers;
+    return !markers.empty();
+}
+
 uint8_t   MP4Header::getExtraHeaderData(uint32_t *len, uint8_t **data)
 {
         *len=0;*data=NULL;
@@ -390,6 +397,9 @@ uint8_t    MP4Header::open(const char *name)
                 return 0;
         }
         
+        _chapterMarkers.clear();
+        ADM_mp4ReadChapterMarkers(name, _chapterMarkers);
+
         _idxName = name;
         _idxName += ".idxb";
 

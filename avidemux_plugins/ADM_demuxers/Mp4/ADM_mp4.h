@@ -263,6 +263,7 @@ protected:
         bool                          checkDuplicatedPts(void);
          /*********************************/
 	uint32_t                         readPackedLen(adm_atom *tom );
+        std::vector<ADM_ChapterMarker> _chapterMarkers;
         
         bool                            loadIndex(const std::string &idxName, uint64_t fileSize);
         void                            saveIndex(const std::string &idxName, uint64_t fileSize, bool overwrite);
@@ -305,6 +306,7 @@ virtual         uint64_t        getVideoDuration(void);
 virtual         uint64_t        getVideoTrackSize(void);
 virtual         bool            getPtsDts(uint32_t frame,uint64_t *pts,uint64_t *dts);
 virtual         bool            setPtsDts(uint32_t frame,uint64_t pts,uint64_t dts);
+virtual         bool            getChapterMarkers(std::vector<ADM_ChapterMarker> &markers) const;
 
 };
 

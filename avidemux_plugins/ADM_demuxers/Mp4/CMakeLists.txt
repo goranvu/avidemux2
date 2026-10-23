@@ -7,6 +7,7 @@ ADM_atom.cpp
 ADM_mp4Analyzer.cpp
 ADM_mp4Fragments.cpp
 ADM_mp4audio.cpp
+ADM_mp4Chapters.cpp
 ADM_mp4.cpp
 ADM_mp4Indexer.cpp
 ADM_mp4Leaf.cpp

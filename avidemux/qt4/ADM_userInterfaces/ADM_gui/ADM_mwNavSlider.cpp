@@ -15,8 +15,12 @@ Custom slider
 #include <stdlib.h>
 #include "ADM_inttype.h"
 #include <QPainter>
+#include <QColor>
+#include <QPen>
 #include <QSlider>
 #include <QWheelEvent>
+#include <QStyle>
+#include <QStyleOptionSlider>
 #include "ADM_mwNavSlider.h"
 #include "ADM_assert.h"
 #include "ADM_default.h"
@@ -68,6 +72,38 @@ void ADM_mwNavSlider::drawCutPoints(void)
     }
 }
 
+void ADM_mwNavSlider::drawChapterPoints(void)
+{
+    if (!totalDuration || chapterMarkers.empty())
+        return;
+
+    QStyleOptionSlider option;
+    initStyleOption(&option);
+    const QRect groove = style()->subControlRect(QStyle::CC_Slider, &option, QStyle::SC_SliderGroove, this);
+    const QRect handle = style()->subControlRect(QStyle::CC_Slider, &option, QStyle::SC_SliderHandle, this);
+    const int usable = qMax(0, groove.width() - handle.width());
+    const int start = groove.left() + handle.width() / 2;
+
+    QPainter painter(this);
+    painter.setPen(QPen(QColor(255, 163, 35), 2));
+    for (uint64_t timestamp : chapterMarkers)
+    {
+        if (timestamp > totalDuration)
+            continue;
+        const double fraction = static_cast<double>(timestamp) / static_cast<double>(totalDuration);
+        int x = start + static_cast<int>(fraction * usable + 0.5);
+        if (layoutDirection() == Qt::RightToLeft)
+            x = width() - 1 - x;
+        painter.drawLine(x, height() - 9, x, height() - 2);
+    }
+}
+
+void ADM_mwNavSlider::setChapterMarkers(const std::vector<uint64_t> &markersUs)
+{
+    chapterMarkers = markersUs;
+    update();
+}
+
 /**
     \fn paintEvent
 */
@@ -78,6 +114,7 @@ void ADM_mwNavSlider::paintEvent(QPaintEvent *event)
     QSlider::paintEvent(event);
 
     drawSelection();
+    drawChapterPoints();
 }
 /**
     \fn setMarkerA
