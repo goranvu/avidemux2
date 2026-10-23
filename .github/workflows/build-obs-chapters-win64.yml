@@ -5,6 +5,7 @@ on:
     branches:
       - obs-hybrid-mp4-chapters
     paths:
+      - '.gitmodules'
       - '.github/workflows/build-obs-chapters-win64.yml'
       - 'avidemux/**'
       - 'avidemux_core/**'
