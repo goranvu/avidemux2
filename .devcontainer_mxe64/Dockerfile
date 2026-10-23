@@ -1,5 +1,5 @@
 #docker build -t avidemux/avidemux_mxe -f .devcontainer_mxe64/Dockerfile .
-FROM debian:trixie
+FROM debian:trixie AS mxe-qt-deps
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG USER_UID=1000
@@ -177,6 +177,15 @@ RUN make \
     x265 \
     xvidcore
 
+# Build Qt's large prerequisites in a successful, separately cacheable stage.
+RUN make qt6-qtbase qt6-qtdeclarative
+
+# The final image starts from the cached Qt dependency stage. If qttools fails,
+# the next workflow run can reuse the expensive Qt base/declarative builds.
+FROM mxe-qt-deps AS final
+
+# Print the actual MXE/CMake diagnostic when this package fails. Docker otherwise
+# reports only the final "Failed to build package" summary, hiding the useful log.
 RUN make qt6-qttools && echo Done || { rc=$?; echo '===== MXE qt6-qttools failure diagnostics ====='; find /opt/mxe/log -maxdepth 3 -type f -name '*qt6-qttools*' -print; find /opt/mxe/log -maxdepth 3 -type f -name '*qt6-qttools*' -exec tail -n 300 {} \; 2>/dev/null || true; find /opt/mxe -maxdepth 7 -type f \( -name CMakeError.log -o -name CMakeOutput.log -o -name config.log \) -path '*qt6-qttools*' -exec tail -n 150 {} \; 2>/dev/null || true; exit $rc; }
 
 ENV PATH="/opt/mxe/usr/bin:/usr/local/bin:/opt/mxe/bin:/opt/mxe/usr/x86_64-pc-linux-gnu/qt6/bin/:${PATH}"
